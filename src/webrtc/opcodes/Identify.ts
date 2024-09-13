@@ -20,13 +20,30 @@ import { CLOSECODES, Payload, Send, WebSocket } from "@spacebar/gateway";
 import {
 	validateSchema,
 	VoiceIdentifySchema,
+	VoiceReadySchema,
 	VoiceState,
 } from "@spacebar/util";
-import { endpoint, getClients, VoiceOPCodes, PublicIP } from "@spacebar/webrtc";
-import SemanticSDP from "semantic-sdp";
-const defaultSDP = require("./sdp.json");
+import {
+	getClients,
+	getOrCreateRouter,
+	getWorker,
+	Stream,
+	VoiceOPCodes,
+} from "@spacebar/webrtc";
 
-export async function onIdentify(this: WebSocket, data: Payload) {
+export interface IdentifyPayload extends Payload {
+	d: {
+		server_id: string; //guild id
+		session_id: string; //gateway session
+		streams: Stream[];
+		token: string; //voice_states token
+		user_id: string;
+		video: boolean;
+		max_dave_protocol_version?: number; // present in v8, not sure what version added it
+	};
+}
+
+export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	clearTimeout(this.readyTimeout);
 	const { server_id, user_id, session_id, token, streams, video } =
 		validateSchema("VoiceIdentifySchema", data.d) as VoiceIdentifySchema;
@@ -38,27 +55,59 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
 	this.user_id = user_id;
 	this.session_id = session_id;
-	const sdp = SemanticSDP.SDPInfo.expand(defaultSDP);
-	sdp.setDTLS(
-		SemanticSDP.DTLSInfo.expand({
-			setup: "actpass",
-			hash: "sha-256",
-			fingerprint: endpoint.getDTLSFingerprint(),
-		}),
-	);
+
+	const worker = getWorker();
+	const router = await getOrCreateRouter(voiceState.channel_id);
+	console.debug(`onIdentify(router)`, router.id);
+
+	const producerTransport = await router.createWebRtcTransport({
+		webRtcServer: worker.appData.webRtcServer!,
+		enableUdp: true,
+	} as any);
+
+	// producerTransport.enableTraceEvent(["bwe", "probation"]);
+
+	// listen to any events
+	for (const event of producerTransport.eventNames()) {
+		if (typeof event !== "string") continue;
+		producerTransport.on(event as any, (...args) => {
+			console.debug(`producerTransport event: ${event}`, args);
+		});
+	}
+	// listen to any events
+	for (const event of producerTransport.observer.eventNames()) {
+		if (typeof event !== "string") continue;
+		producerTransport.observer.on(event as any, (...args) => {
+			console.debug(`producerTransport observer event: ${event}`, args);
+		});
+	}
+
+	// const consumerTransport = await router.createWebRtcTransport({
+	// 	webRtcServer: worker.appData.webRtcServer!,
+	// 	enableUdp: true,
+	// });
+	// consumerTransport.enableTraceEvent(["bwe", "probation"]);
+
+	// // listen to any events
+	// for (const event of consumerTransport.eventNames()) {
+	// 	if (typeof event !== "string") continue;
+	// 	consumerTransport.on(event as any, (...args) => {
+	// 		console.debug(`consumerTransport event: ${event}`, args);
+	// 	});
+	// }
 
 	this.client = {
 		websocket: this,
-		out: {
-			tracks: new Map(),
-		},
-		in: {
-			audio_ssrc: 0,
-			video_ssrc: 0,
-			rtx_ssrc: 0,
-		},
-		sdp,
+		ssrc: 1,
 		channel_id: voiceState.channel_id,
+		codecs: [],
+		streams: streams!,
+		headerExtensions: [],
+		producers: new Map(),
+		consumers: new Map(),
+		transports: {
+			producer: producerTransport,
+		},
 	};
 
 	const clients = getClients(voiceState.channel_id)!;
@@ -68,24 +117,30 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 		clients.delete(this.client!);
 	});
 
-	await Send(this, {
+	const d = {
 		op: VoiceOPCodes.READY,
 		d: {
-			streams: [
-				// { type: "video", ssrc: this.ssrc + 1, rtx_ssrc: this.ssrc + 2, rid: "100", quality: 100, active: false }
-			],
-			ssrc: -1,
-			port: endpoint.getLocalPort(),
+			streams: streams?.map((x) => ({
+				...x,
+				ssrc: ++this.client!.ssrc, // first stream should be 2
+				rtx_ssrc: ++this.client!.ssrc, // first stream should be 3
+			})),
+			ssrc: this.client.ssrc, // this is just a base, first stream ssrc will be +1 with rtx +2
+			ip: "192.168.10.112",
+			port: 20000,
 			modes: [
 				"aead_aes256_gcm_rtpsize",
 				"aead_aes256_gcm",
+				"aead_xchacha20_poly1305_rtpsize",
 				"xsalsa20_poly1305_lite_rtpsize",
 				"xsalsa20_poly1305_lite",
 				"xsalsa20_poly1305_suffix",
 				"xsalsa20_poly1305",
 			],
-			ip: PublicIP,
-			experiments: [],
-		},
-	});
+			experiments: ["fixed_keyframe_interval"],
+		} as VoiceReadySchema,
+	};
+
+	console.debug(`onIdentify(ready packet)`, d);
+	await Send(this, d);
 }

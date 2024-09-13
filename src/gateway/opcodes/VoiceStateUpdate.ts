@@ -17,19 +17,19 @@
 */
 
 import { Payload, WebSocket } from "@spacebar/gateway";
-import { genVoiceToken } from "../util/SessionUtils";
-import { check } from "./instanceOf";
 import {
 	Config,
 	emitEvent,
 	Guild,
 	Member,
+	Region,
 	VoiceServerUpdateEvent,
 	VoiceState,
 	VoiceStateUpdateEvent,
 	VoiceStateUpdateSchema,
-	Region,
 } from "@spacebar/util";
+import { genVoiceToken } from "../util/SessionUtils";
+import { check } from "./instanceOf";
 // TODO: check if a voice server is setup
 
 // Notice: Bot users respect the voice channel's user limit, if set.
@@ -136,6 +136,7 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
 				endpoint: guildRegion.endpoint,
 			},
 			guild_id: voiceState.guild_id,
+			user_id: voiceState.user_id,
 		} as VoiceServerUpdateEvent);
 	}
 }

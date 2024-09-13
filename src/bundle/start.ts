@@ -17,15 +17,16 @@
 */
 
 // process.env.MONGOMS_DEBUG = "true";
+process.env.DEBUG = "mediasoup*";
 require("module-alias/register");
-import "reflect-metadata";
-import cluster, { Worker } from "cluster";
-import os from "os";
-import { red, bold, yellow, cyan } from "picocolors";
-import { initStats } from "./stats";
-import { config } from "dotenv";
-config();
 import { execSync } from "child_process";
+import cluster, { Worker } from "cluster";
+import { config } from "dotenv";
+import os from "os";
+import { bold, cyan, red, yellow } from "picocolors";
+import "reflect-metadata";
+import { initStats } from "./stats";
+config();
 
 const cores = process.env.THREADS ? parseInt(process.env.THREADS) : 1;
 

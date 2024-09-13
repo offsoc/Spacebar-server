@@ -18,8 +18,55 @@
 
 import { Payload, Send, WebSocket } from "@spacebar/gateway";
 import { SelectProtocolSchema, validateSchema } from "@spacebar/util";
-import { PublicIP, VoiceOPCodes, endpoint } from "@spacebar/webrtc";
-import SemanticSDP, { MediaInfo, SDPInfo } from "semantic-sdp";
+import { types as MediaSoupTypes } from "mediasoup";
+import * as sdpTransform from "sdp-transform";
+import { getRouter, SUPPORTED_EXTENTIONS, VoiceOPCodes } from "../util";
+
+// request:
+// {
+// 	"codecs": [
+// 		{
+// 			"name": "opus",
+// 			"payload_type": 109,
+// 			"priority": 1000,
+// 			"rtx_payload_type": null,
+// 			"type": "audio"
+// 		},
+// 		{
+// 			"name": "H264",
+// 			"payload_type": 126,
+// 			"priority": 1000,
+// 			"rtx_payload_type": 127,
+// 			"type": "video"
+// 		},
+// 		{
+// 			"name": "VP8",
+// 			"payload_type": 120,
+// 			"priority": 2000,
+// 			"rtx_payload_type": 124,
+// 			"type": "video"
+// 		},
+// 		{
+// 			"name": "VP9",
+// 			"payload_type": 121,
+// 			"priority": 3000,
+// 			"rtx_payload_type": 125,
+// 			"type": "video"
+// 		}
+// 	],
+// 	"data": "a=fingerprint:sha-256 F1:31:51:8B:E9:C8:3F:33:61:41:5C:BA:7A:59:07:4A:DA:53:40:88:62:0B:DA:B0:4D:0C:58:9B:16:D8:9F:25\na=ice-options:trickle\na=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\na=extmap:2/recvonly urn:ietf:params:rtp-hdrext:csrc-audio-level\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\na=ice-pwd:5ac55fdfff3ac50fbb6c2852baea62bf\na=ice-ufrag:5e6e9e9c\na=rtpmap:109 opus/48000/2\na=extmap:4 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\na=extmap:5 urn:ietf:params:rtp-hdrext:toffset\na=extmap:6/recvonly http://www.webrtc.org/experiments/rtp-hdrext/playout-delay\na=extmap:7 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\na=rtpmap:120 VP8/90000\na=rtpmap:124 rtx/90000",
+// 	"protocol": "webrtc",
+// 	"rtc_connection_id": "70a69cc2-14d7-496e-ba4b-d16570a95ade",
+// 	"sdp": "a=fingerprint:sha-256 F1:31:51:8B:E9:C8:3F:33:61:41:5C:BA:7A:59:07:4A:DA:53:40:88:62:0B:DA:B0:4D:0C:58:9B:16:D8:9F:25\na=ice-options:trickle\na=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\na=extmap:2/recvonly urn:ietf:params:rtp-hdrext:csrc-audio-level\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\na=ice-pwd:5ac55fdfff3ac50fbb6c2852baea62bf\na=ice-ufrag:5e6e9e9c\na=rtpmap:109 opus/48000/2\na=extmap:4 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\na=extmap:5 urn:ietf:params:rtp-hdrext:toffset\na=extmap:6/recvonly http://www.webrtc.org/experiments/rtp-hdrext/playout-delay\na=extmap:7 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\na=rtpmap:120 VP8/90000\na=rtpmap:124 rtx/90000"
+// }
+
+// response:
+// {
+//     "audio_codec": "opus",
+//     "media_session_id": "40984f1105901745530fb81cfe5f5633",
+//     "sdp": "m=audio 50021 ICE/SDP\na=fingerprint:sha-256 4A:79:94:16:44:3F:BD:05:41:5A:C7:20:F3:12:54:70:00:73:5D:33:00:2D:2C:80:9B:39:E1:9F:2D:A7:49:87\nc=IN IP4 66.22.206.164\na=rtcp:50021\na=ice-ufrag:iLG8\na=ice-pwd:qMfFrCD0PcC/TxyfQM9H7t\na=fingerprint:sha-256 4A:79:94:16:44:3F:BD:05:41:5A:C7:20:F3:12:54:70:00:73:5D:33:00:2D:2C:80:9B:39:E1:9F:2D:A7:49:87\na=candidate:1 1 UDP 4261412862 66.22.206.164 50021 typ host\n",
+//     "video_codec": "H264"
+// }
 
 export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 	if (!this.client) return;
@@ -29,39 +76,120 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 		payload.d,
 	) as SelectProtocolSchema;
 
-	const offer = SemanticSDP.SDPInfo.parse("m=audio\n" + data.sdp!);
-	this.client.sdp!.setICE(offer.getICE());
-	this.client.sdp!.setDTLS(offer.getDTLS());
+	await Send(this, { op: VoiceOPCodes.MEDIA_SINK_WANTS, d: { any: 100 } });
 
-	const transport = endpoint.createTransport(this.client.sdp!);
-	this.client.transport = transport;
-	transport.setRemoteProperties(this.client.sdp!);
-	transport.setLocalProperties(this.client.sdp!);
+	const router = getRouter(this.client.channel_id);
+	if (!router) {
+		console.error("Could not find router");
+		this.close();
+		return;
+	}
 
-	const dtls = transport.getLocalDTLSInfo();
-	const ice = transport.getLocalICEInfo();
-	const port = endpoint.getLocalPort();
-	const fingerprint = dtls.getHash() + " " + dtls.getFingerprint();
-	const candidates = transport.getLocalCandidates();
-	const candidate = candidates[0];
+	const clientAudioCodecs = data
+		.codecs!.filter((x) => x.type === "audio")
+		.sort((a, b) => a.priority - b.priority);
 
-	const answer =
-		`m=audio ${port} ICE/SDP` +
-		`a=fingerprint:${fingerprint}` +
-		`c=IN IP4 ${PublicIP}` +
-		`a=rtcp:${port}` +
-		`a=ice-ufrag:${ice.getUfrag()}` +
-		`a=ice-pwd:${ice.getPwd()}` +
-		`a=fingerprint:${fingerprint}` +
-		`a=candidate:1 1 ${candidate.getTransport()} ${candidate.getFoundation()} ${candidate.getAddress()} ${candidate.getPort()} typ host`;
+	const clientVideoCodecs = data
+		.codecs!.filter((x) => x.type === "video")
+		.sort((a, b) => a.priority - b.priority);
 
+	const serverAudioCodecs = router.rtpCapabilities.codecs!.filter(
+		(x) => x.kind === "audio",
+	);
+
+	const serverVideoCodecs = router.rtpCapabilities.codecs!.filter(
+		(x) => x.kind === "video",
+	);
+
+	const audioCodec = serverAudioCodecs.find((x) => {
+		return clientAudioCodecs.some(
+			(y) => y.name === x.mimeType.split("/")[1],
+		);
+	});
+
+	const videoCodec = serverVideoCodecs.find((x) => {
+		return clientVideoCodecs.some(
+			(y) => y.name === x.mimeType.split("/")[1],
+		);
+	});
+
+	if (!audioCodec || !videoCodec) {
+		console.error("Could not agree on a codec");
+		this.close();
+		return;
+	}
+
+	const sdp = sdpTransform.parse(data.sdp!);
+	this.client.sdp = sdp;
+	this.client.codecs = data.codecs!;
+	this.client.headerExtensions =
+		sdp.ext
+			?.filter((x) => SUPPORTED_EXTENTIONS.includes(x.uri))
+			.map((x) => ({
+				uri: x.uri as MediaSoupTypes.RtpHeaderExtensionUri,
+				id: x.value,
+			})) ?? [];
+
+	await this.client.transports.producer.connect({
+		dtlsParameters: {
+			fingerprints: [
+				{
+					algorithm: sdp.fingerprint!
+						.type as MediaSoupTypes.FingerprintAlgorithm,
+					value: sdp.fingerprint!.hash,
+				},
+			],
+			role: "client",
+		},
+	});
+
+	console.debug("producer transport connected");
+
+	// await this.client.transports.consumer.connect({
+	// 	dtlsParameters: {
+	// 		fingerprints: [
+	// 			{
+	// 				algorithm: sdp.fingerprint!
+	// 					.type as MediaSoupTypes.FingerprintAlgorithm,
+	// 				value: sdp.fingerprint!.hash,
+	// 			},
+	// 		],
+	// 		role: "client",
+	// 	},
+	// });
+
+	// console.debug("consumer transport connected");
+
+	const iceParameters = this.client.transports.producer.iceParameters;
+	const iceCandidates = this.client.transports.producer.iceCandidates;
+	const iceCandidate = iceCandidates[0];
+	const dltsParamters = this.client.transports.producer.dtlsParameters;
+	const fingerprint = dltsParamters.fingerprints.find(
+		(x) => x.algorithm === "sha-256",
+	)!;
+
+	const sdpAnswer =
+		`m=audio ${iceCandidate.port} ICE/SDP\n` +
+		`a=fingerprint:sha-256 ${fingerprint.value}\n` +
+		`c=IN IP4 ${iceCandidate.ip}\n` +
+		`a=rtcp:${iceCandidate.port}\n` +
+		`a=ice-ufrag:${iceParameters.usernameFragment}\n` +
+		`a=ice-pwd:${iceParameters.password}\n` +
+		`a=fingerprint:sha-256 ${fingerprint.value}\n` +
+		`a=candidate:1 1 ${iceCandidate.protocol.toUpperCase()} ${
+			iceCandidate.priority
+		} ${iceCandidate.ip} ${iceCandidate.port} typ ${iceCandidate.type}\n`;
+
+	console.debug("onSelectProtocol sdp serialized\n", sdpAnswer);
 	await Send(this, {
-		op: VoiceOPCodes.SESSION_DESCRIPTION,
+		op: VoiceOPCodes.SELECT_PROTOCOL_ACK,
 		d: {
-			video_codec: "H264",
-			sdp: answer,
+			// audio_codec: audioCodec.mimeType.split("/")[1],
+			// video_codec: videoCodec.mimeType.split("/")[1],
+			audioCodec: "opus",
+			videoCodec: "H264",
 			media_session_id: this.session_id,
-			audio_codec: "opus",
+			sdp: sdpAnswer,
 		},
 	});
 }

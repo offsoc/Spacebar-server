@@ -17,11 +17,12 @@
 */
 
 import { Payload, Send, WebSocket } from "@spacebar/gateway";
+import * as mediasoup from "mediasoup";
 import { VoiceOPCodes } from "../util";
 
 export async function onBackendVersion(this: WebSocket, data: Payload) {
 	await Send(this, {
 		op: VoiceOPCodes.VOICE_BACKEND_VERSION,
-		d: { voice: "0.8.43", rtc_worker: "0.3.26" },
+		d: { voice: "0.1.0", rtc_worker: mediasoup.version },
 	});
 }

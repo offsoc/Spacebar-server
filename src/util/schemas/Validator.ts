@@ -41,6 +41,7 @@ export const ajv = new Ajv({
 	strict: true,
 	strictRequired: true,
 	allowUnionTypes: true,
+	removeAdditional: true,
 });
 
 addFormats(ajv);

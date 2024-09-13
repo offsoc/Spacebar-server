@@ -54,6 +54,7 @@
 		"@types/node-os-utils": "^1.3.1",
 		"@types/nodemailer": "^6.4.9",
 		"@types/probe-image-size": "^7.2.0",
+		"@types/sdp-transform": "^2.4.9",
 		"@types/sharp": "^0.31.1",
 		"@types/ws": "^8.5.5",
 		"@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -89,6 +90,7 @@
 		"json-bigint": "^1.0.0",
 		"jsonwebtoken": "^9.0.1",
 		"lambert-server": "^1.2.12",
+		"mediasoup": "^3.14.14",
 		"missing-native-js-functions": "^1.4.3",
 		"module-alias": "^2.2.3",
 		"morgan": "^1.10.0",
@@ -102,6 +104,8 @@
 		"probe-image-size": "^7.2.3",
 		"proxy-agent": "^6.3.0",
 		"reflect-metadata": "^0.1.13",
+		"sdp-transform": "^2.14.2",
+		"semantic-sdp": "^3.30.0",
 		"ts-node": "^10.9.1",
 		"tslib": "^2.6.1",
 		"typeorm": "^0.3.17",
@@ -113,7 +117,8 @@
 		"@spacebar/api": "dist/api",
 		"@spacebar/cdn": "dist/cdn",
 		"@spacebar/gateway": "dist/gateway",
-		"@spacebar/util": "dist/util"
+		"@spacebar/util": "dist/util",
+		"@spacebar/webrtc": "dist/webrtc"
 	},
 	"optionalDependencies": {
 		"erlpack": "^0.1.4",
