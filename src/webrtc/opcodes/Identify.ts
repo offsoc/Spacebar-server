@@ -25,11 +25,27 @@ import {
 } from "@spacebar/util";
 import {
 	getClients,
+	getLocalIp,
 	getOrCreateRouter,
-	getWorker,
 	Stream,
 	VoiceOPCodes,
 } from "@spacebar/webrtc";
+
+// {
+// 	"max_dave_protocol_version": 0,
+// 	"server_id": "",
+// 	"session_id": "",
+// 	"streams": [
+// 		{
+// 			"quality": 100,
+// 			"rid": "100",
+// 			"type": "video"
+// 		}
+// 	],
+// 	"token": "",
+// 	"user_id": "",
+// 	"video": true
+// }
 
 export interface IdentifyPayload extends Payload {
 	d: {
@@ -56,16 +72,16 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	this.user_id = user_id;
 	this.session_id = session_id;
 
-	const worker = getWorker();
 	const router = await getOrCreateRouter(voiceState.channel_id);
-	console.debug(`onIdentify(router)`, router.id);
+	console.debug(`onIdentify(router)`, router.router.id);
 
-	const producerTransport = await router.createWebRtcTransport({
-		webRtcServer: worker.appData.webRtcServer!,
+	const producerTransport = await router.router.createWebRtcTransport({
+		listenIps: [{ ip: process.env.LISTEN_IP || getLocalIp() }],
 		enableUdp: true,
-	} as any);
+		initialAvailableOutgoingBitrate: 150000000,
+	});
 
-	// producerTransport.enableTraceEvent(["bwe", "probation"]);
+	producerTransport.enableTraceEvent(["bwe", "probation"]);
 
 	// listen to any events
 	for (const event of producerTransport.eventNames()) {
@@ -82,20 +98,6 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 		});
 	}
 
-	// const consumerTransport = await router.createWebRtcTransport({
-	// 	webRtcServer: worker.appData.webRtcServer!,
-	// 	enableUdp: true,
-	// });
-	// consumerTransport.enableTraceEvent(["bwe", "probation"]);
-
-	// // listen to any events
-	// for (const event of consumerTransport.eventNames()) {
-	// 	if (typeof event !== "string") continue;
-	// 	consumerTransport.on(event as any, (...args) => {
-	// 		console.debug(`consumerTransport event: ${event}`, args);
-	// 	});
-	// }
-
 	this.client = {
 		websocket: this,
 		ssrc: 1,
@@ -103,11 +105,9 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 		codecs: [],
 		streams: streams!,
 		headerExtensions: [],
-		producers: new Map(),
+		producers: [],
 		consumers: new Map(),
-		transports: {
-			producer: producerTransport,
-		},
+		transport: producerTransport,
 	};
 
 	const clients = getClients(voiceState.channel_id)!;
@@ -126,18 +126,18 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 				rtx_ssrc: ++this.client!.ssrc, // first stream should be 3
 			})),
 			ssrc: this.client.ssrc, // this is just a base, first stream ssrc will be +1 with rtx +2
-			ip: "192.168.10.112",
-			port: 20000,
+			ip: producerTransport.iceCandidates[0].ip,
+			port: producerTransport.iceCandidates[0].port,
 			modes: [
-				"aead_aes256_gcm_rtpsize",
-				"aead_aes256_gcm",
-				"aead_xchacha20_poly1305_rtpsize",
-				"xsalsa20_poly1305_lite_rtpsize",
-				"xsalsa20_poly1305_lite",
-				"xsalsa20_poly1305_suffix",
-				"xsalsa20_poly1305",
+				// "aead_aes256_gcm_rtpsize",
+				// "aead_aes256_gcm",
+				// "aead_xchacha20_poly1305_rtpsize",
+				// "xsalsa20_poly1305_lite_rtpsize",
+				// "xsalsa20_poly1305_lite",
+				// "xsalsa20_poly1305_suffix",
+				// "xsalsa20_poly1305",
 			],
-			experiments: ["fixed_keyframe_interval"],
+			experiments: [],
 		} as VoiceReadySchema,
 	};
 

@@ -45,7 +45,7 @@ export async function onClose(this: WebSocket, code: number, reason: string) {
 
 	this.client?.producers.forEach((producer) => producer.close());
 	this.client?.consumers.forEach((consumer) => consumer.close());
-	this.client?.transports.producer.close();
+	this.client?.transport?.close();
 
 	this.removeAllListeners();
 }

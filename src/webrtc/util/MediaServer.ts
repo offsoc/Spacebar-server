@@ -18,11 +18,38 @@
 import { WebSocket } from "@spacebar/gateway";
 import * as mediasoup from "mediasoup";
 import { types as MediaSoupTypes } from "mediasoup";
+import os from "os";
 import * as sdpTransform from "sdp-transform";
+
+const ifaces = os.networkInterfaces();
+
+export function getLocalIp() {
+	let localIp = "127.0.0.1";
+
+	Object.keys(ifaces).forEach((ifname) => {
+		for (const iface of ifaces[ifname]!) {
+			// Ignore IPv6 and 127.0.0.1
+			if (iface.family !== "IPv4" || iface.internal !== false) {
+				continue;
+			}
+
+			// Set the local ip to the first IPv4 address found and exit the loop
+			localIp = iface.address;
+			return;
+		}
+	});
+
+	return localIp;
+}
+
+interface RouterType {
+	router: MediaSoupTypes.Router;
+	worker: MediaSoupTypes.Worker<AppData>;
+}
 
 export const channels = new Map<string, Set<Client>>();
 export const workers: MediaSoupTypes.Worker<AppData>[] = [];
-export const routers = new Map<string, MediaSoupTypes.Router>();
+export const routers = new Map<string, RouterType>();
 export let nextWorkerIdx = 0;
 
 export interface Client {
@@ -34,12 +61,9 @@ export interface Client {
 	// secret_key?: Uint8Array;
 	codecs: Codec[];
 	streams: Stream[];
-	producers: Map<number, MediaSoupTypes.Producer>;
+	producers: MediaSoupTypes.Producer[];
 	consumers: Map<string, MediaSoupTypes.Consumer>;
-	transports: {
-		producer: MediaSoupTypes.WebRtcTransport;
-		consumer?: MediaSoupTypes.WebRtcTransport;
-	};
+	transport?: MediaSoupTypes.WebRtcTransport;
 }
 
 export function getClients(channel_id: string) {
@@ -53,19 +77,23 @@ export function getRouter(channelId: string) {
 
 export async function getOrCreateRouter(channel_id: string) {
 	if (!routers.has(channel_id)) {
-		const worker = getWorker();
+		const worker = getNextWorker();
 		const router = await worker.createRouter({
 			mediaCodecs: MEDIA_CODECS,
 		});
 
-		routers.set(channel_id, router);
-		return router;
+		const data = {
+			router,
+			worker,
+		};
+		routers.set(channel_id, data);
+		return data;
 	}
 
 	return routers.get(channel_id)!;
 }
 
-export function getWorker() {
+export function getNextWorker() {
 	const worker = workers[nextWorkerIdx];
 
 	if (++nextWorkerIdx === workers.length) nextWorkerIdx = 0;
@@ -93,6 +121,8 @@ export async function createWorkers() {
 				"svc",
 				"sctp",
 			],
+			rtcMinPort: 40000,
+			rtcMaxPort: 49999,
 		});
 
 		worker.on("died", () => {
@@ -104,144 +134,27 @@ export async function createWorkers() {
 			setTimeout(() => process.exit(1), 2000);
 		});
 
-		worker.observer.on("newrouter", (router) => {
-			console.debug("new router [pid:%d]: %s", worker.pid, router.id);
-
-			router.observer.on("newrtpobserver", (rtpObserver) => {
-				console.debug(
-					"new RtpObserver [pid:%d]: %s",
-					worker.pid,
-					rtpObserver.id,
-				);
-			});
-
-			router.observer.on("newtransport", async (transport) => {
-				console.debug(
-					"new transport [pid:%d]: %s",
-					worker.pid,
-					transport.id,
-				);
-
-				await transport.enableTraceEvent();
-
-				(transport as MediaSoupTypes.WebRtcTransport).on(
-					"iceselectedtuplechange",
-					(tuple) => {
-						console.log(`transport(iceselectedtuplechange)`, tuple);
-					},
-				);
-
-				(transport as MediaSoupTypes.WebRtcTransport).on(
-					"icestatechange",
-					(icestate) => {
-						console.log(`transport(ice state change)`, icestate);
-					},
-				);
-
-				(transport as MediaSoupTypes.WebRtcTransport).on(
-					"trace",
-					(trace) => {
-						console.log(`transport(trace)`, trace);
-					},
-				);
-
-				(transport as MediaSoupTypes.WebRtcTransport).on(
-					"dtlsstatechange",
-					(dtlsstate) => {
-						console.log(`transport(dtls state change)`, dtlsstate);
-					},
-				);
-
-				(transport as MediaSoupTypes.WebRtcTransport).on(
-					"sctpstatechange",
-					(sctpstate) => {
-						console.log(`transport(sctp state change)`, sctpstate);
-					},
-				);
-
-				transport.observer.on("newproducer", (producer) => {
-					console.debug(
-						"new Producer [pid:%d]: %s",
-						worker.pid,
-						producer.id,
-					);
-
-					producer.on("score", (score) => {
-						console.log(`transport producer(score)`, score);
-					});
-
-					producer.on("trace", (trace) => {
-						console.log(`transport producer(trace)`, trace);
-					});
-
-					producer.on("videoorientationchange", (orientation) => {
-						console.log(
-							`transport producer(videoorientationchange)`,
-							orientation,
-						);
-					});
-				});
-
-				transport.observer.on("newconsumer", (consumer) => {
-					console.debug(
-						"new Consumer [pid:%d]: %s",
-						worker.pid,
-						consumer.id,
-					);
-
-					consumer.on("rtp", (rtpPacket) => {
-						console.log(`transport consumer(rtp)`, rtpPacket);
-					});
-
-					consumer.on("trace", (trace) => {
-						console.log(`transport consumer(trace)`, trace);
-					});
-
-					consumer.on("score", (score) => {
-						console.log(`transport consumer(score)`, score);
-					});
-
-					consumer.on("layerschange", (layers) => {
-						console.log(`transport consumer(layerschange)`, layers);
-					});
-				});
-			});
-		});
-
-		worker.observer.on("newwebrtcserver", (webRtcServer) => {
-			console.debug(
-				"new WebRtcServer [pid:%d]: %s",
-				worker.pid,
-				webRtcServer.id,
-			);
-		});
-
-		worker.observer.on("close", () => {
-			console.debug("mediasoup Worker closed [pid:%d]", worker.pid);
-		});
-
 		workers.push(worker);
 
-		// Create a WebRtcServer in this Worker.
-		// Each mediasoup Worker will run its own WebRtcServer, so those cannot
-		// share the same listening ports. Hence we increase the value in config.js
-		// for each Worker.
-		const webRtcServerOptions: MediaSoupTypes.WebRtcServerOptions = {
-			listenInfos: [
-				{
-					protocol: "udp",
-					ip: "0.0.0.0",
-					announcedAddress: "192.168.10.112",
-					port: 20000,
-				},
-			],
-		};
+		// // Create a WebRtcServer in this Worker.
+		// // Each mediasoup Worker will run its own WebRtcServer, so those cannot
+		// // share the same listening ports.
+		// const webRtcServerOptions: MediaSoupTypes.WebRtcServerOptions = {
+		// 	listenInfos: [
+		// 		{
+		// 			protocol: "udp",
+		// 			ip: "0.0.0.0",
+		// 			announcedAddress: "192.168.10.112",
+		// 			port: nextPort++,
+		// 		},
+		// 	],
+		// };
 
-		const webRtcServer = await worker.createWebRtcServer(
-			webRtcServerOptions,
-		);
+		// const webRtcServer = await worker.createWebRtcServer(
+		// 	webRtcServerOptions,
+		// );
 
-		worker.appData.webRtcServer = webRtcServer;
+		// worker.appData.webRtcServer = webRtcServer;
 
 		// Log worker resource usage every X seconds.
 		// setInterval(async () => {

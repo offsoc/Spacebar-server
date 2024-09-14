@@ -93,11 +93,11 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 		.codecs!.filter((x) => x.type === "video")
 		.sort((a, b) => a.priority - b.priority);
 
-	const serverAudioCodecs = router.rtpCapabilities.codecs!.filter(
+	const serverAudioCodecs = router.router.rtpCapabilities.codecs!.filter(
 		(x) => x.kind === "audio",
 	);
 
-	const serverVideoCodecs = router.rtpCapabilities.codecs!.filter(
+	const serverVideoCodecs = router.router.rtpCapabilities.codecs!.filter(
 		(x) => x.kind === "video",
 	);
 
@@ -128,9 +128,11 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 			.map((x) => ({
 				uri: x.uri as MediaSoupTypes.RtpHeaderExtensionUri,
 				id: x.value,
+				parameters: x.config,
+				encrypt: false,
 			})) ?? [];
 
-	await this.client.transports.producer.connect({
+	await this.client.transport!.connect({
 		dtlsParameters: {
 			fingerprints: [
 				{
@@ -145,25 +147,10 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 
 	console.debug("producer transport connected");
 
-	// await this.client.transports.consumer.connect({
-	// 	dtlsParameters: {
-	// 		fingerprints: [
-	// 			{
-	// 				algorithm: sdp.fingerprint!
-	// 					.type as MediaSoupTypes.FingerprintAlgorithm,
-	// 				value: sdp.fingerprint!.hash,
-	// 			},
-	// 		],
-	// 		role: "client",
-	// 	},
-	// });
-
-	// console.debug("consumer transport connected");
-
-	const iceParameters = this.client.transports.producer.iceParameters;
-	const iceCandidates = this.client.transports.producer.iceCandidates;
+	const iceParameters = this.client.transport!.iceParameters;
+	const iceCandidates = this.client.transport!.iceCandidates;
 	const iceCandidate = iceCandidates[0];
-	const dltsParamters = this.client.transports.producer.dtlsParameters;
+	const dltsParamters = this.client.transport!.dtlsParameters;
 	const fingerprint = dltsParamters.fingerprints.find(
 		(x) => x.algorithm === "sha-256",
 	)!;
@@ -179,6 +166,34 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 		`a=candidate:1 1 ${iceCandidate.protocol.toUpperCase()} ${
 			iceCandidate.priority
 		} ${iceCandidate.ip} ${iceCandidate.port} typ ${iceCandidate.type}\n`;
+
+	const a = sdpTransform.parse(sdpAnswer);
+	a.media.push({
+		type: "audio",
+		direction: "sendrecv",
+		// codecs: [
+		// 	{
+		// 		codec: "opus",
+		// 		type: 111,
+		// 		channels: 2,
+		// 		params: {
+		// 			minptime: "10",
+		// 			useinbandfec: "1",
+		// 		},
+		// 		rtcpfbs: [
+		// 			{
+		// 				id: "transport-cc",
+		// 			},
+		// 		],
+		// 	},
+		// ],
+		ext: [
+			{
+				value: 1,
+				uri: "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+			},
+		],
+	});
 
 	console.debug("onSelectProtocol sdp serialized\n", sdpAnswer);
 	await Send(this, {
