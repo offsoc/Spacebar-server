@@ -167,34 +167,6 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 			iceCandidate.priority
 		} ${iceCandidate.ip} ${iceCandidate.port} typ ${iceCandidate.type}\n`;
 
-	const a = sdpTransform.parse(sdpAnswer);
-	a.media.push({
-		type: "audio",
-		direction: "sendrecv",
-		// codecs: [
-		// 	{
-		// 		codec: "opus",
-		// 		type: 111,
-		// 		channels: 2,
-		// 		params: {
-		// 			minptime: "10",
-		// 			useinbandfec: "1",
-		// 		},
-		// 		rtcpfbs: [
-		// 			{
-		// 				id: "transport-cc",
-		// 			},
-		// 		],
-		// 	},
-		// ],
-		ext: [
-			{
-				value: 1,
-				uri: "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
-			},
-		],
-	});
-
 	console.debug("onSelectProtocol sdp serialized\n", sdpAnswer);
 	await Send(this, {
 		op: VoiceOPCodes.SELECT_PROTOCOL_ACK,
