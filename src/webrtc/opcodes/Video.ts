@@ -18,7 +18,7 @@
 
 import { Payload, Send, WebSocket } from "@spacebar/gateway";
 import { validateSchema, VoiceVideoSchema } from "@spacebar/util";
-import { getRouter, VoiceOPCodes } from "../util";
+import { getClients, getRouter, VoiceOPCodes } from "../util";
 
 // request:
 // {
@@ -79,18 +79,64 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 					ssrc: d.audio_ssrc,
 				},
 			],
+			// headerExtensions: this.client
+			// 	.sdpOffer2!.media[0].ext?.filter((x) =>
+			// 		SUPPORTED_EXTENTIONS.includes(x.uri),
+			// 	)
+			// 	.map((x) => ({
+			// 		uri: x.uri as NMediaSoupTypes.RtpHeaderExtensionUri,
+			// 		id: x.value,
+			// 		encrypt: false,
+			// 	})),
 		},
 	});
 
 	await producer.enableTraceEvent(["rtp"]);
 
-	producer.on("score", (score) => {
-		console.debug(`audio producer score:`, score);
-	});
+	// producer.on("score", (score) => {
+	// 	console.debug(`audio producer score:`, score);
+	// });
 
-	producer.on("trace", (trace) => {
-		console.debug(`audio producer trace:`, trace);
-	});
+	// producer.on("trace", (trace) => {
+	// 	console.debug(`audio producer trace:`, trace);
+	// });
 
-	this.client.producers.push(producer);
+	// this.client.producers.push(producer);
+	this.client.producers.audio = producer;
+
+	// loop the clients and add a consumer for each one
+	const clients = getClients(channel_id);
+	for (const client of clients) {
+		if (client.websocket.user_id === this.user_id) continue;
+		if (!client.transport) continue;
+
+		const consumer = await client.transport.consume({
+			producerId: producer.id,
+			rtpCapabilities: router.router.rtpCapabilities,
+			paused: false,
+		});
+
+		// listen to any events
+		for (const event of consumer.eventNames()) {
+			if (typeof event !== "string") continue;
+			consumer.on(event as any, (...args) => {
+				console.debug(
+					`consumer(producer of ${this.user_id}; ${event}):`,
+					args,
+				);
+			});
+		}
+		// listen to any events
+		for (const event of consumer.observer.eventNames()) {
+			if (typeof event !== "string") continue;
+			consumer.observer.on(event as any, (...args) => {
+				console.debug(
+					`consumer observer(producer of ${this.user_id}; ${event}):`,
+					args,
+				);
+			});
+		}
+
+		client.consumers.audio = consumer;
+	}
 }

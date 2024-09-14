@@ -105,7 +105,7 @@
 		"proxy-agent": "^6.3.0",
 		"reflect-metadata": "^0.1.13",
 		"sdp-transform": "^2.14.2",
-		"semantic-sdp": "^3.30.0",
+		"semantic-sdp": "^3.25.1",
 		"ts-node": "^10.9.1",
 		"tslib": "^2.6.1",
 		"typeorm": "^0.3.17",

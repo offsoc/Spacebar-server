@@ -19,7 +19,7 @@ import { WebSocket } from "@spacebar/gateway";
 import * as mediasoup from "mediasoup";
 import { types as MediaSoupTypes } from "mediasoup";
 import os from "os";
-import * as sdpTransform from "sdp-transform";
+import * as SemanticSDP from "semantic-sdp";
 
 const ifaces = os.networkInterfaces();
 
@@ -53,17 +53,35 @@ export const routers = new Map<string, RouterType>();
 export let nextWorkerIdx = 0;
 
 export interface Client {
-	websocket: WebSocket;
-	ssrc: number;
-	sdp?: sdpTransform.SessionDescription;
-	channel_id: string;
-	headerExtensions: MediaSoupTypes.RtpHeaderExtensionParameters[];
-	// secret_key?: Uint8Array;
-	codecs: Codec[];
-	streams: Stream[];
-	producers: MediaSoupTypes.Producer[];
-	consumers: Map<string, MediaSoupTypes.Consumer>;
 	transport?: MediaSoupTypes.WebRtcTransport;
+	websocket: WebSocket;
+	out: {
+		stream?: Stream;
+		tracks: Map<
+			string,
+			{
+				audio_ssrc: number;
+				video_ssrc: number;
+				rtx_ssrc: number;
+			}
+		>;
+	};
+	in: {
+		stream?: Stream;
+		audio_ssrc: number;
+		video_ssrc: number;
+		rtx_ssrc: number;
+	};
+	sdpOffer: SemanticSDP.SDPInfo;
+	channel_id: string;
+	producers: {
+		audio?: MediaSoupTypes.Producer;
+		video?: MediaSoupTypes.Producer;
+	};
+	consumers: {
+		audio?: MediaSoupTypes.Consumer;
+		video?: MediaSoupTypes.Consumer;
+	};
 }
 
 export function getClients(channel_id: string) {

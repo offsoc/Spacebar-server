@@ -30,6 +30,8 @@ import {
 	Stream,
 	VoiceOPCodes,
 } from "@spacebar/webrtc";
+import * as SemanticSDP from "semantic-sdp";
+import defaultSDP from "./sdp.json";
 
 // {
 // 	"max_dave_protocol_version": 0,
@@ -61,6 +63,7 @@ export interface IdentifyPayload extends Payload {
 
 export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	clearTimeout(this.readyTimeout);
+
 	const { server_id, user_id, session_id, token, streams, video } =
 		validateSchema("VoiceIdentifySchema", data.d) as VoiceIdentifySchema;
 
@@ -87,27 +90,41 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	for (const event of producerTransport.eventNames()) {
 		if (typeof event !== "string") continue;
 		producerTransport.on(event as any, (...args) => {
-			console.debug(`producerTransport event: ${event}`, args);
+			console.debug(`producerTransport(${event}):`, args);
 		});
 	}
 	// listen to any events
 	for (const event of producerTransport.observer.eventNames()) {
 		if (typeof event !== "string") continue;
 		producerTransport.observer.on(event as any, (...args) => {
-			console.debug(`producerTransport observer event: ${event}`, args);
+			console.debug(`producerTransport observer(${event}):`, args);
 		});
 	}
 
+	const offer = SemanticSDP.SDPInfo.expand(defaultSDP);
+	offer.setDTLS(
+		SemanticSDP.DTLSInfo.expand({
+			setup: "actpass",
+			hash: "sha-256",
+			fingerprint: `${producerTransport.dtlsParameters.fingerprints[0].algorithm} ${producerTransport.dtlsParameters.fingerprints[0].value}`,
+		}),
+	);
+
 	this.client = {
 		websocket: this,
-		ssrc: 1,
+		out: {
+			tracks: new Map(),
+		},
+		in: {
+			audio_ssrc: 0,
+			video_ssrc: 0,
+			rtx_ssrc: 0,
+		},
+		sdpOffer: offer,
 		channel_id: voiceState.channel_id,
-		codecs: [],
-		streams: streams!,
-		headerExtensions: [],
-		producers: [],
-		consumers: new Map(),
 		transport: producerTransport,
+		producers: {},
+		consumers: {},
 	};
 
 	const clients = getClients(voiceState.channel_id)!;
@@ -120,12 +137,13 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	const d = {
 		op: VoiceOPCodes.READY,
 		d: {
+			ssrc: ++this.client.in.video_ssrc, // this is just a base, first stream ssrc will be +1 with rtx +2
 			streams: streams?.map((x) => ({
 				...x,
-				ssrc: ++this.client!.ssrc, // first stream should be 2
-				rtx_ssrc: ++this.client!.ssrc, // first stream should be 3
+				ssrc: ++this.client!.in.video_ssrc, // first stream should be 2
+				rtx_ssrc: ++this.client!.in.video_ssrc, // first stream should be 3
 			})),
-			ssrc: this.client.ssrc, // this is just a base, first stream ssrc will be +1 with rtx +2
+
 			ip: producerTransport.iceCandidates[0].ip,
 			port: producerTransport.iceCandidates[0].port,
 			modes: [
