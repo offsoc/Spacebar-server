@@ -78,10 +78,7 @@ export interface Client {
 		audio?: MediaSoupTypes.Producer;
 		video?: MediaSoupTypes.Producer;
 	};
-	consumers: {
-		audio?: MediaSoupTypes.Consumer;
-		video?: MediaSoupTypes.Consumer;
-	};
+	consumers: MediaSoupTypes.Consumer[];
 }
 
 export function getClients(channel_id: string) {

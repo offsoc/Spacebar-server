@@ -124,7 +124,7 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 		channel_id: voiceState.channel_id,
 		transport: producerTransport,
 		producers: {},
-		consumers: {},
+		consumers: [],
 	};
 
 	const clients = getClients(voiceState.channel_id)!;

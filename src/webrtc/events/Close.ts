@@ -18,33 +18,34 @@
 
 import { WebSocket } from "@spacebar/gateway";
 import { Session } from "@spacebar/util";
+import { getClients } from "../util";
 
 export async function onClose(this: WebSocket, code: number, reason: string) {
 	console.log("[WebRTC] closed", code, reason.toString());
 
 	if (this.session_id) await Session.delete({ session_id: this.session_id });
 
-	// // we need to find all consumers on all clients that have a producer in our client
-	// const clients = getClients(this.client?.channel_id!);
+	// we need to find all consumers on all clients that have a producer in our client
+	const clients = getClients(this.client?.channel_id!);
 
-	// for (const client of clients) {
-	// 	if (client.websocket.user_id === this.user_id) continue;
+	for (const client of clients) {
+		if (client.websocket.user_id === this.user_id) continue;
 
-	// 	// if any consumer on this client has a producer id that is in our client, close it
-	// 	client.consumers.forEach((consumer) => {
-	// 		// check if any producers in our client have the same producer id
-	// 		this.client?.producers.forEach((producer) => {
-	// 			if (producer.id === consumer.producerId) {
-	// 				console.log("[WebRTC] closing consumer", consumer.id);
-	// 				consumer.close();
-	// 			}
-	// 		});
-	// 	});
-	// }
+		// if any consumer on this client has a producer id that is in our client, close it
+		client.consumers.forEach((consumer) => {
+			if (
+				client.producers.audio?.id === consumer.producerId ||
+				client.producers.video?.id === consumer.producerId
+			) {
+				console.log("[WebRTC] closing consumer", consumer.id);
+				consumer.close();
+			}
+		});
+	}
 
-	// this.client?.producers.forEach((producer) => producer.close());
-	// this.client?.consumers.forEach((consumer) => consumer.close());
 	this.client?.transport?.close();
+	this.client?.producers.audio?.close();
+	this.client?.producers.video?.close();
 
 	this.removeAllListeners();
 }
