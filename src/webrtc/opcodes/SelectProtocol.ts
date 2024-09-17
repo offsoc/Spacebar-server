@@ -19,8 +19,9 @@
 import { Payload, Send, WebSocket } from "@spacebar/gateway";
 import { SelectProtocolSchema, validateSchema } from "@spacebar/util";
 import { types as MediaSoupTypes } from "mediasoup";
+import * as sdpTransform from "sdp-transform";
 import * as SemanticSDP from "semantic-sdp";
-import { getRouter, VoiceOPCodes } from "../util";
+import { getRouter, SUPPORTED_EXTENTIONS, VoiceOPCodes } from "../util";
 
 // request:
 // {
@@ -121,17 +122,17 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 	// }
 
 	const offer = SemanticSDP.SDPInfo.parse("m=audio\n" + data.sdp);
+	const offer2 = sdpTransform.parse(data.sdp!);
 	this.client.sdpOffer = offer;
-	// this.client.codecs = data.codecs!;
-	// this.client.headerExtensions =
-	// 	sdp.ext
-	// 		?.filter((x) => SUPPORTED_EXTENTIONS.includes(x.uri))
-	// 		.map((x) => ({
-	// 			uri: x.uri as MediaSoupTypes.RtpHeaderExtensionUri,
-	// 			id: x.value,
-	// 			parameters: x.config,
-	// 			encrypt: false,
-	// 		})) ?? [];
+	this.client.headerExtensions =
+		offer2.ext
+			?.filter((x) => SUPPORTED_EXTENTIONS.includes(x.uri))
+			.map((x) => ({
+				uri: x.uri as MediaSoupTypes.RtpHeaderExtensionUri,
+				id: x.value,
+				parameters: x.config,
+				encrypt: false,
+			})) ?? [];
 
 	// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 	//@ts-ignore

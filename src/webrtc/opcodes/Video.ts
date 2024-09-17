@@ -81,6 +81,11 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 								{ type: "nack" },
 								{ type: "transport-cc" },
 							],
+							parameters: {
+								minptime: 10,
+								usedtx: 1,
+								useinbandfec: 1,
+							},
 						},
 					],
 					encodings: [
@@ -130,6 +135,9 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 						clockRate: 90000,
 						parameters: {
 							"level-asymmetry-allowed": 1,
+							"packetization-mode": 1,
+							"profile-level-id": "42e01f",
+							"x-google-start-bitrate": 2500,
 						},
 						rtcpFeedback: [
 							{ type: "nack" },
@@ -145,17 +153,11 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 						ssrc: d.video_ssrc,
 						rtx: { ssrc: d.rtx_ssrc! },
 						scalabilityMode: "L1T1",
+						scaleResolutionDownBy: 1,
+						maxBitrate: 2500000,
 					},
 				],
-				// headerExtensions: this.client
-				// 	.sdpOffer2!.media[1].ext?.filter((x) =>
-				// 		SUPPORTED_EXTENTIONS.includes(x.uri),
-				// 	)
-				// 	.map((x) => ({
-				// 		uri: x.uri as NMediaSoupTypes.RtpHeaderExtensionUri,
-				// 		id: x.value,
-				// 		encrypt: false,
-				// 	})),
+				headerExtensions: this.client.headerExtensions,
 			},
 		});
 

@@ -79,6 +79,7 @@ export interface Client {
 		video?: MediaSoupTypes.Producer;
 	};
 	consumers: MediaSoupTypes.Consumer[];
+	headerExtensions: MediaSoupTypes.RtpHeaderExtensionParameters[];
 }
 
 export function getClients(channel_id: string) {
@@ -211,46 +212,51 @@ export const MEDIA_CODECS: MediaSoupTypes.RtpCodecCapability[] = [
 		clockRate: 48000,
 		channels: 2,
 		rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
-	},
-	{
-		kind: "audio",
-		mimeType: "audio/multiopus",
-		clockRate: 48000,
-		channels: 4,
-		// Quad channel.
 		parameters: {
-			channel_mapping: "0,1,2,3",
-			num_streams: 2,
-			coupled_streams: 2,
+			minptime: 10,
+			usedtx: 1,
+			useinbandfec: 1,
 		},
-		rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
 	},
-	{
-		kind: "audio",
-		mimeType: "audio/multiopus",
-		clockRate: 48000,
-		channels: 6,
-		// 5.1.
-		parameters: {
-			channel_mapping: "0,4,1,2,3,5",
-			num_streams: 4,
-			coupled_streams: 2,
-		},
-		rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
-	},
-	{
-		kind: "audio",
-		mimeType: "audio/multiopus",
-		clockRate: 48000,
-		channels: 8,
-		// 7.1.
-		parameters: {
-			channel_mapping: "0,6,1,2,3,4,5,7",
-			num_streams: 5,
-			coupled_streams: 3,
-		},
-		rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
-	},
+	// {
+	// 	kind: "audio",
+	// 	mimeType: "audio/multiopus",
+	// 	clockRate: 48000,
+	// 	channels: 4,
+	// 	// Quad channel.
+	// 	parameters: {
+	// 		channel_mapping: "0,1,2,3",
+	// 		num_streams: 2,
+	// 		coupled_streams: 2,
+	// 	},
+	// 	rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
+	// },
+	// {
+	// 	kind: "audio",
+	// 	mimeType: "audio/multiopus",
+	// 	clockRate: 48000,
+	// 	channels: 6,
+	// 	// 5.1.
+	// 	parameters: {
+	// 		channel_mapping: "0,4,1,2,3,5",
+	// 		num_streams: 4,
+	// 		coupled_streams: 2,
+	// 	},
+	// 	rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
+	// },
+	// {
+	// 	kind: "audio",
+	// 	mimeType: "audio/multiopus",
+	// 	clockRate: 48000,
+	// 	channels: 8,
+	// 	// 7.1.
+	// 	parameters: {
+	// 		channel_mapping: "0,6,1,2,3,4,5,7",
+	// 		num_streams: 5,
+	// 		coupled_streams: 3,
+	// 	},
+	// 	rtcpFeedback: [{ type: "nack" }, { type: "transport-cc" }],
+	// },
 	{
 		kind: "video",
 		mimeType: "video/VP8",
@@ -281,6 +287,9 @@ export const MEDIA_CODECS: MediaSoupTypes.RtpCodecCapability[] = [
 		clockRate: 90000,
 		parameters: {
 			"level-asymmetry-allowed": 1,
+			"packetization-mode": 1,
+			"profile-level-id": "42e01f",
+			"x-google-start-bitrate": 2500,
 		},
 		rtcpFeedback: [
 			{ type: "nack" },
