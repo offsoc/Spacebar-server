@@ -53,6 +53,8 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 
 	await Send(this, { op: VoiceOPCodes.MEDIA_SINK_WANTS, d: { any: 100 } });
 
+	if (d.audio_ssrc === 0 && d.video_ssrc === 0) return;
+
 	const router = getRouter(channel_id);
 	if (!router) {
 		console.error(`router not found`);
@@ -71,7 +73,7 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 				rtpParameters: {
 					codecs: [
 						{
-							payloadType: 109,
+							payloadType: 111,
 							mimeType: "audio/opus",
 							clockRate: 48000,
 							channels: 2,
@@ -84,6 +86,13 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 					encodings: [
 						{
 							ssrc: d.audio_ssrc,
+							maxBitrate: 64000,
+						},
+					],
+					headerExtensions: [
+						{
+							id: 1,
+							uri: "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
 						},
 					],
 					// headerExtensions: this.client
@@ -100,15 +109,9 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 
 			await audioProducer.enableTraceEvent(["rtp"]);
 
-			// producer.on("score", (score) => {
-			// 	console.debug(`audio producer score:`, score);
-			// });
-
-			// producer.on("trace", (trace) => {
-			// 	console.debug(`audio producer trace:`, trace);
-			// });
-
-			// this.client.producers.push(producer);
+			audioProducer.on("score", (score) => {
+				console.debug(`audio producer score:`, score);
+			});
 			this.client.producers.audio = audioProducer;
 		}
 	}
@@ -122,19 +125,7 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 			rtpParameters: {
 				codecs: [
 					{
-						payloadType: 120,
-						mimeType: "video/VP8",
-						clockRate: 90000,
-						rtcpFeedback: [
-							{ type: "nack" },
-							{ type: "nack", parameter: "pli" },
-							{ type: "ccm", parameter: "fir" },
-							{ type: "goog-remb" },
-							{ type: "transport-cc" },
-						],
-					},
-					{
-						payloadType: 126,
+						payloadType: 102,
 						mimeType: "video/H264",
 						clockRate: 90000,
 						parameters: {
@@ -153,6 +144,7 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 					{
 						ssrc: d.video_ssrc,
 						rtx: { ssrc: d.rtx_ssrc! },
+						scalabilityMode: "L1T1",
 					},
 				],
 				// headerExtensions: this.client
@@ -172,10 +164,6 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 		videoProducer.on("score", (score) => {
 			console.debug(`video producer score:`, score);
 		});
-
-		videoProducer.on("trace", (trace) => {
-			console.debug(`video producer trace:`, trace);
-		});
 	}
 
 	// loop the clients and add a consumer for each one
@@ -186,8 +174,8 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 
 		if (d.audio_ssrc !== 0) {
 			// close the existing consumer if it exists
-			const a = client.consumers.find((x) => x.kind === "audio");
-			await a?.close();
+			const a = client.consumers.filter((x) => x.kind === "audio");
+			await a.forEach(async (x) => await x.close());
 			const consumer = await client.transport.consume({
 				producerId: audioProducer?.id!,
 				rtpCapabilities: router.router.rtpCapabilities,
@@ -198,8 +186,8 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 
 		if (d.video_ssrc !== 0) {
 			// close the existing consumer if it exists
-			const a = client.consumers.find((x) => x.kind === "video");
-			await a?.close();
+			const a = client.consumers.filter((x) => x.kind === "video");
+			await a.forEach(async (x) => await x.close());
 			const consumer = await client.transport.consume({
 				producerId: videoProducer?.id!,
 				rtpCapabilities: router.router.rtpCapabilities,
@@ -207,5 +195,18 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 			});
 			client.consumers.push(consumer);
 		}
+
+		Send(client.websocket, {
+			op: VoiceOPCodes.VIDEO,
+			d: {
+				user_id: this.user_id,
+				audio_ssrc: d.audio_ssrc || 0,
+				video_ssrc: d.video_ssrc || 0,
+				streams: d.streams?.map((x) => ({
+					...x,
+					active: true,
+				})),
+			},
+		});
 	}
 }

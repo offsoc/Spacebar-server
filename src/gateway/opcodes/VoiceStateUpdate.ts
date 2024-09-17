@@ -39,6 +39,8 @@ import { check } from "./instanceOf";
 export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
 	check.call(this, VoiceStateUpdateSchema, data.d);
 	const body = data.d as VoiceStateUpdateSchema;
+	const isNew = body.channel_id === null && body.guild_id === null;
+	let isChanged = false;
 
 	let voiceState: VoiceState;
 	try {
@@ -53,6 +55,8 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
 			//changing deaf or mute on a client that's not the one with the same session of the voicestate in the database should be ignored
 			return;
 		}
+
+		if (voiceState.channel_id !== body.channel_id) isChanged = true;
 
 		//If a user change voice channel between guild we should send a left event first
 		if (
@@ -112,7 +116,7 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
 	]);
 
 	//If it's null it means that we are leaving the channel and this event is not needed
-	if (voiceState.channel_id !== null) {
+	if ((isNew || isChanged) && voiceState.channel_id !== null) {
 		const guild = await Guild.findOne({
 			where: { id: voiceState.guild_id },
 		});

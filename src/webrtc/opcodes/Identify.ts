@@ -81,25 +81,27 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 	const producerTransport = await router.router.createWebRtcTransport({
 		listenIps: [{ ip: process.env.LISTEN_IP || getLocalIp() }],
 		enableUdp: true,
-		initialAvailableOutgoingBitrate: 150000000,
-	});
+		maxIncomingBitrate: 1500000,
+		initialAvailableOutgoingBitrate: 1000000,
+	} as any);
 
 	producerTransport.enableTraceEvent(["bwe", "probation"]);
 
-	// listen to any events
-	for (const event of producerTransport.eventNames()) {
-		if (typeof event !== "string") continue;
-		producerTransport.on(event as any, (...args) => {
-			console.debug(`producerTransport(${event}):`, args);
-		});
-	}
-	// listen to any events
-	for (const event of producerTransport.observer.eventNames()) {
-		if (typeof event !== "string") continue;
-		producerTransport.observer.on(event as any, (...args) => {
-			console.debug(`producerTransport observer(${event}):`, args);
-		});
-	}
+	producerTransport.on("trace", (trace) => {
+		console.log(`transport trace`, trace);
+	});
+
+	// setInterval(async () => {
+	// 	if (producerTransport.closed) return;
+	// 	console.log(
+	// 		`transport stats`,
+	// 		JSON.stringify(await producerTransport.getStats(), null, 4),
+	// 	);
+	// 	console.log(
+	// 		`transport dump`,
+	// 		JSON.stringify(await producerTransport.dump(), null, 4),
+	// 	);
+	// }, 10 * 1000);
 
 	const offer = SemanticSDP.SDPInfo.expand(defaultSDP);
 	offer.setDTLS(
@@ -143,7 +145,6 @@ export async function onIdentify(this: WebSocket, data: IdentifyPayload) {
 				ssrc: ++this.client!.in.video_ssrc, // first stream should be 2
 				rtx_ssrc: ++this.client!.in.video_ssrc, // first stream should be 3
 			})),
-
 			ip: producerTransport.iceCandidates[0].ip,
 			port: producerTransport.iceCandidates[0].port,
 			modes: [
