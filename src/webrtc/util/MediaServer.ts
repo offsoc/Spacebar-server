@@ -299,7 +299,6 @@ export const MEDIA_CODECS: MediaSoupTypes.RtpCodecCapability[] = [
 			{ type: "goog-remb" },
 			{ type: "transport-cc" },
 		],
-		preferredPayloadType: 102,
 	},
 	{
 		kind: "video",
