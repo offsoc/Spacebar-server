@@ -137,6 +137,8 @@ export async function onSelectProtocol(this: WebSocket, payload: Payload) {
 	// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 	//@ts-ignore
 	offer.getMedias()[0].type = "audio"; // this is bad, but answer.toString() fails otherwise
+	console.log(offer.getMedias());
+	offer.getMedias()[0].setBitrate(64000);
 	const remoteDTLS = offer.getDTLS().plain();
 
 	await this.client.transport!.connect({

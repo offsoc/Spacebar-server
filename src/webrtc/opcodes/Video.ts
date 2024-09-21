@@ -78,7 +78,7 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 							clockRate: 48000,
 							channels: 2,
 							rtcpFeedback: [
-								{ type: "nack" },
+								// { type: "nack" },
 								{ type: "transport-cc" },
 							],
 							parameters: {
@@ -99,17 +99,13 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 							id: 1,
 							uri: "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
 						},
+						{
+							id: 3,
+							uri: "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
+						},
 					],
-					// headerExtensions: this.client
-					// 	.sdpOffer2!.media[0].ext?.filter((x) =>
-					// 		SUPPORTED_EXTENTIONS.includes(x.uri),
-					// 	)
-					// 	.map((x) => ({
-					// 		uri: x.uri as NMediaSoupTypes.RtpHeaderExtensionUri,
-					// 		id: x.value,
-					// 		encrypt: false,
-					// 	})),
 				},
+				paused: false,
 			});
 
 			await audioProducer.enableTraceEvent(["rtp"]);
@@ -117,6 +113,11 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 			audioProducer.on("score", (score) => {
 				console.debug(`audio producer score:`, score);
 			});
+
+			// audioProducer.on("trace", (trace) => {
+			// 	console.debug(`audio producer trace:`, trace);
+			// });
+
 			this.client.producers.audio = audioProducer;
 		}
 	}
@@ -159,6 +160,7 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 				],
 				headerExtensions: this.client.headerExtensions,
 			},
+			paused: false,
 		});
 
 		await videoProducer.enableTraceEvent(["rtp"]);
@@ -182,6 +184,16 @@ export async function onVideo(this: WebSocket, payload: Payload) {
 				producerId: audioProducer?.id!,
 				rtpCapabilities: router.router.rtpCapabilities,
 				paused: false,
+			});
+			consumer.enableTraceEvent(["rtp"]);
+			// consumer.on("trace", (trace) => {
+			// 	console.debug(`audio consumer trace:`, trace);
+			// });
+			consumer.on("score", (score) => {
+				console.debug(
+					`audio consumer(${client.websocket.user_id}/${d.audio_ssrc}) score:`,
+					score,
+				);
 			});
 			client.consumers.push(consumer);
 		}

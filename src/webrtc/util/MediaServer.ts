@@ -217,6 +217,7 @@ export const MEDIA_CODECS: MediaSoupTypes.RtpCodecCapability[] = [
 			usedtx: 1,
 			useinbandfec: 1,
 		},
+		preferredPayloadType: 111,
 	},
 	// {
 	// 	kind: "audio",
@@ -298,6 +299,7 @@ export const MEDIA_CODECS: MediaSoupTypes.RtpCodecCapability[] = [
 			{ type: "goog-remb" },
 			{ type: "transport-cc" },
 		],
+		preferredPayloadType: 102,
 	},
 	{
 		kind: "video",
