@@ -113,6 +113,7 @@
 		"ws": "^8.18.0"
 	},
 	"_moduleAliases": {
+		"@spacebar/admin-api": "dist/admin-api",
 		"@spacebar/api": "dist/api",
 		"@spacebar/cdn": "dist/cdn",
 		"@spacebar/gateway": "dist/gateway",

@@ -20,6 +20,7 @@ process.on("unhandledRejection", console.error);
 process.on("uncaughtException", console.error);
 
 import http from "http";
+import * as AdminApi from "@spacebar/admin-api";
 import * as Api from "@spacebar/api";
 import * as Gateway from "@spacebar/gateway";
 import { CDNServer } from "@spacebar/cdn";
@@ -33,6 +34,7 @@ const port = Number(process.env.PORT) || 3001;
 const production = process.env.NODE_ENV == "development" ? false : true;
 server.on("request", app);
 
+const adminApi = new AdminApi.AdminApiServer({ server, port, production, app });
 const api = new Api.SpacebarServer({ server, port, production, app });
 const cdn = new CDNServer({ server, port, production, app });
 const gateway = new Gateway.Server({ server, port, production });
@@ -41,6 +43,7 @@ process.on("SIGTERM", async () => {
 	console.log("Shutting down due to SIGTERM");
 	await gateway.stop();
 	await cdn.stop();
+	await adminApi.stop();
 	await api.stop();
 	server.close();
 	Sentry.close();
@@ -54,7 +57,7 @@ async function main() {
 	await new Promise((resolve) =>
 		server.listen({ port }, () => resolve(undefined)),
 	);
-	await Promise.all([api.start(), cdn.start(), gateway.start()]);
+	await Promise.all([adminApi.start(), api.start(), cdn.start(), gateway.start()]);
 
 	Sentry.errorHandler(app);
 
